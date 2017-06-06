@@ -313,7 +313,18 @@ class ApplicationDetailPDF(ApplicationDetail):
     Depending on performance and resource constraints, this might need to be
     refactored to use an asynchronous task.
     """
-    template_name = 'applications/application_detail_pdf.html'
+    def get_context_data(self, **kwargs):
+        context = super(ApplicationDetailPDF, self).get_context_data(**kwargs)
+        app = self.get_object()
+        if app.app_type == app.APP_TYPE_CHOICES.emergency:
+            self.template_name = 'applications/application_detail_emergency_pdf.html'
+            print (self.template_name)
+
+        elif app.app_type == app.APP_TYPE_CHOICES.license:
+            self.template_name = 'applications/application_detail_pdf.html'
+
+        context['abs_url'] = self.request.scheme + '://' + self.request.get_host() + '/'
+        return context
 
     def get(self, request, *args, **kwargs):
         response = super(ApplicationDetailPDF, self).get(request)
@@ -321,6 +332,9 @@ class ApplicationDetailPDF(ApplicationDetail):
             'page-size': 'A4',
             'encoding': 'UTF-8',
         }
+
+        print (request.get_host(), request.scheme)
+        #print (response.rendered_content)
         # Generate the PDF as a string, then use that as the response body.
         output = pdfkit.from_string(
             response.rendered_content, False, options=options)

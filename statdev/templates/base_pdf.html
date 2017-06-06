@@ -4,6 +4,9 @@
         <title>{{ page_title }}</title>
         <meta name="description" content="{{ page_description }}">
         {% block base_style %}
+        {% load static %}
+        <link rel="stylesheet" type="text/css" href="{{ abs_url }}static/css/pdf.css" />
+        <link rel="stylesheet" type="text/css" href="{{ abs_url }}static/css/applications.css" />
         <link rel="stylesheet" type="text/css" href="https://static.dpaw.wa.gov.au/static/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css">
         {% endblock base_style %}
         {% block extra_head %}{% endblock %}
