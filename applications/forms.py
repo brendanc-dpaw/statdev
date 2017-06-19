@@ -12,7 +12,7 @@ from multiupload.fields import MultiFileField
 from ledger.accounts.models import EmailUser, Address, Organisation
 from .models import (
     Application, Referral, Condition, Compliance, Vessel, Record, PublicationNewspaper,
-    PublicationWebsite, PublicationFeedback, Delegate)
+    PublicationWebsite, PublicationFeedback, Delegate, Communication)
 
 User = get_user_model()
 
@@ -47,6 +47,31 @@ class ApplicationCreateForm(ModelForm):
         # Add labels for fields
         self.fields['app_type'].label = "Application Type"
 
+class CommunicationCreateForm(ModelForm):
+    records = Field(required=False, widget=ClearableMultipleFileInput(attrs={'multiple':'multiple'}),  label='Documents')
+
+    class Meta:
+        model = Communication 
+        fields = ['comms_to','comms_from','subject','comms_type','details','records','details']
+
+    def __init__(self, *args, **kwargs):
+        # User must be passed in as a kwarg.
+        user = kwargs.pop('user')
+        #application = kwargs.pop('application')
+        super(CommunicationCreateForm, self).__init__(*args, **kwargs)
+
+        self.fields['comms_to'].required = True
+        self.fields['comms_from'].required = True
+        self.fields['subject'].required = True
+        self.fields['comms_type'].required = True
+
+        self.helper = BaseFormHelper()
+        self.helper.form_id = 'id_form_create_communication'
+        self.helper.attrs = {'novalidate': ''}
+        self.helper.add_input(Submit('save', 'Create', css_class='btn-lg'))
+        self.helper.add_input(Submit('cancel', 'Cancel'))
+        # Add labels for fields
+        #self.fields['app_type'].label = "Application Type"
 
 class ApplicationWebPublishForm(ModelForm):
 
@@ -214,6 +239,26 @@ class ApplicationPermitForm(ApplicationFormMixin, ModelForm):
         self.fields['description'].label = "Description of works, acts or activities"
         self.fields['records'].label = "Attach more detailed descripton, maps or plans"
         #self.fields['other_supporting_docs'].label = "Attach supporting information to demonstrate compliance with relevant Trust policies"
+
+class ApplicationChange(ApplicationFormMixin, ModelForm):
+     proposed_development_plans = Field(required=False, widget=ClearableMultipleFileInput(attrs={'multiple':'multiple'}),  label='Supporting Documents')
+
+     class Meta:
+        model = Application
+        fields = ['title','app_type','proposed_development_plans','proposed_development_description']
+
+     def __init__(self, *args, **kwargs):
+        super(ApplicationChange, self).__init__(*args, **kwargs)
+
+        self.helper = BaseFormHelper()
+        self.fields['proposed_development_description'].label = "Details of proposed ammendment"
+        self.fields['app_type'].disabled = True
+        self.fields['title'].disabled = True
+        self.helper.form_id = 'id_form_change_ammend'
+        self.helper.attrs = {'novalidate': ''}
+        self.helper.add_input(Submit('createform', 'Create Form', css_class='btn-lg'))
+        self.helper.add_input(Submit('cancel', 'Cancel'))
+
 
 
 class ApplicationPart5Form(ApplicationFormMixin, ModelForm):

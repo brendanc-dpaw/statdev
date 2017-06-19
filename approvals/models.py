@@ -17,20 +17,32 @@ class Approval(models.Model):
         (2, 'expired', ('Expired')),
         (3, 'cancelled', ('Cancelled')),
         (4, 'surrendered', ('Surrendered')),
-        (5, 'suspended', ('Suspended'))
+        (5, 'suspended', ('Suspended')),
+        (6, 'reinstate', ('Reinstate'))
      )
 
      app_type = models.IntegerField(choices=Application.APP_TYPE_CHOICES)
      title = models.CharField(max_length=254)
      applicant = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.PROTECT, related_name='applicant_holder') 
-     application = models.ForeignKey(Application, on_delete=models.CASCADE,null=True, blank=True) 
+     application = models.ForeignKey(Application, on_delete=models.CASCADE,null=True, blank=True, related_name='application') 
      start_date = models.DateField(null=True, blank=True)
      expiry_date = models.DateField(null=True, blank=True)
      status = models.IntegerField(choices=APPROVAL_STATE_CHOICES) 
      approval_document = models.ForeignKey(Record, null=True, blank=True, related_name='approval_document')
+     suspend_from_date = models.DateField(null=True, blank=True)
+     suspend_to_date = models.DateField(null=True, blank=True)
+     ammendment_application  = models.ForeignKey(Application, on_delete=models.CASCADE,null=True, blank=True, related_name='ammendment_application')
+     reinstate_date = models.DateField(null=True, blank=True)
+     cancellation_date = models.DateField(null=True, blank=True)
+     surrender_date = models.DateField(null=True, blank=True)
+     details = models.TextField(null=True, blank=True)
 
      def __str__(self):
-        if self.id:
-            return '{} ({})'.format(self.title, self.app_type)
+        return 'Approvals {}: {} - {} ({})'.format(
+            self.pk, self.get_app_type_display(), self.title, self.get_status_display())
+
         return self.name
+
+
+ 
 

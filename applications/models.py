@@ -9,6 +9,7 @@ from model_utils import Choices
 from django.contrib.auth.models import Group
 
 from ledger.accounts.models import Organisation
+#from ledger.payments.models import Invoice
 
 
 @python_2_unicode_compatible
@@ -28,6 +29,7 @@ class Record(models.Model):
         (8, 'determination', ('Determination document')),
         (9, 'completion', ('Completed document')),
     )
+
     upload = models.FileField(max_length=512, upload_to='uploads/%Y/%m/%d')
     name = models.CharField(max_length=256)
     category = models.IntegerField(choices=DOC_CATEGORY_CHOICES, null=True, blank=True)
@@ -75,13 +77,15 @@ class Application(models.Model):
     """This model represents an application by a customer to P&W for a single
     permit, licence/permit, part 5, etc.
     """
+
     APP_TYPE_CHOICES = Choices(
         (1, 'permit', ('Permit')),
         (2, 'licence', ('Licence/permit')),
         (3, 'part5', ('Part 5 - New Application')),
         (4, 'emergency', ('Emergency works')),
         (5, 'part5cr', ('Part 5 - Amendment Request')),
-        (6, 'part5amend', ('Part 5 - Amendment Application'))
+        (6, 'part5amend', ('Part 5 - Amendment Application')),
+        (7, 'test', ('Test - Application'))
     )
     APP_STATE_CHOICES = Choices(
         (1, 'draft', ('Draft')),
@@ -175,6 +179,8 @@ class Application(models.Model):
     document_memo = models.ForeignKey(Record, null=True, blank=True, related_name='document_memo')
     document_briefing_note = models.ForeignKey(Record, null=True, blank=True, related_name='document_briefing_note')
     document_determination_approved = models.ForeignKey(Record, null=True, blank=True, related_name='document_determination_approved')
+    approval_id = models.IntegerField(null=True, blank=True)
+    assessed_by = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.PROTECT, related_name='assessed_by')
 
     def __str__(self):
         return 'Application {}: {} - {} ({})'.format(
@@ -359,10 +365,21 @@ class Compliance(models.Model):
 class Communication(models.Model):
     """This model represents the communication model
     """
+    COMM_TYPE = Choices(
+        (0, 'none', ('None')),
+        (1, 'phone', ('Phone')),
+        (2, 'email', ('Email')),
+        (3, 'mail', ('Mail')),
+    )
+
     application = models.ForeignKey(Application, on_delete=models.PROTECT)
+    comms_to = models.CharField(max_length=256, null=True, blank=True)
+    comms_from = models.CharField(max_length=256, null=True, blank=True)
+    subject = models.CharField(max_length=256, null=True, blank=True)
+    comms_type = models.IntegerField(choices=COMM_TYPE, default=COMM_TYPE.none )
     details = models.TextField(blank=True, null=True)
     records = models.ManyToManyField(Record, blank=True, related_name='communication_docs')
-    state = models.IntegerField()  # move to foreign key once APP_STATE_CHOICES becomes a model
+    state = models.IntegerField(blank=True, null=True)  # move to foreign key once APP_STATE_CHOICES becomes a model
     created = models.DateTimeField(auto_now_add=True)
 
 
@@ -380,3 +397,15 @@ class Delegate(models.Model):
 
     class Meta:
         unique_together = ('email_user', 'organisation')
+
+
+@python_2_unicode_compatible
+class ApplicationInvoice(models.Model):
+    """This model represents a reference to an invoice for payment raised against
+    an application.
+    """
+    application = models.ForeignKey(Application)
+    invoice_reference = models.CharField(max_length=64)
+
+    def __str__(self):
+        return 'Application {} invoice {}'.format(self.application, self.invoice_reference)

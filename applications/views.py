@@ -30,7 +30,7 @@ from applications.email import sendHtmlEmail, emailGroup, emailApplicationReferr
 from applications.validationchecks import Attachment_Extension_Check
 from applications.utils import get_query
 from ledger.accounts.models import EmailUser, Address, Organisation
-
+from approvals.models import Approval
 
 class HomePage(LoginRequiredMixin, TemplateView):
     # TODO: rename this view to something like UserDashboard.
@@ -194,7 +194,6 @@ class ApplicationDetail(DetailView):
 
         #sendHtmlEmail(['jason.moore@dpaw.wa.gov.au'],'HTML TEST EMAIL',emailcontext,'email.html' ,None,None,None)
         #emailGroup('HTML TEST EMAIL',emailcontext,'email.html' ,None,None,None,'Processor')
-
         if app.assignee is not None:
             context['application_assignee_id'] = app.assignee.id
 
@@ -202,13 +201,31 @@ class ApplicationDetail(DetailView):
         usergroups = self.request.user.groups.all()
         # print app.group
         if app.group in usergroups:
-            if int(app.routeid) > 1:
+            if float(app.routeid) > 1:
                 context['may_assign_to_person'] = 'True'
 
         if app.app_type == app.APP_TYPE_CHOICES.part5:
             self.template_name = 'applications/application_details_part5_new_application.html'
             part5 = Application_Part5()
             context = part5.get(app, self, context)
+        elif app.app_type == app.APP_TYPE_CHOICES.part5cr:
+            self.template_name = 'applications/application_part5_ammendment_request.html'
+            part5 = Application_Part5()
+            context = part5.get(app, self, context)
+            #flow = Flow()
+            #workflowtype = flow.getWorkFlowTypeFromApp(app)
+            #flow.get(workflowtype)
+            #context = flow.getAccessRights(self.request,context,app.routeid,workflowtype)
+            #context = flow.getCollapse(context,app.routeid,workflowtype)
+            #context = flow.getHiddenAreas(context,app.routeid,workflowtype)
+            #context['workflow_actions'] = flow.getAllRouteActions(app.routeid,workflowtype)
+            #context['formcomponent'] = flow.getFormComponent(app.routeid,workflowtype)
+        elif app.app_type == app.APP_TYPE_CHOICES.part5amend:
+            self.template_name = 'applications/application_part5_amend.html'
+            part5 = Application_Part5()
+            context = part5.get(app, self, context)
+
+
         elif app.app_type == app.APP_TYPE_CHOICES.emergency:
             self.template_name = 'applications/application_detail_emergency.html'
             emergency = Application_Emergency()
@@ -220,10 +237,20 @@ class ApplicationDetail(DetailView):
         elif app.app_type == app.APP_TYPE_CHOICES.licence:
             licence = Application_Licence()
             context = licence.get(app, self, context)
+        else:
+            flow = Flow()
+            workflowtype = flow.getWorkFlowTypeFromApp(app)
+            flow.get(workflowtype)
+            context = flow.getAccessRights(self.request,context,app.routeid,workflowtype)
+            context = flow.getCollapse(context,app.routeid,workflowtype)
+            context = flow.getHiddenAreas(context,app.routeid,workflowtype)
+            context['workflow_actions'] = flow.getAllRouteActions(app.routeid,workflowtype)
+            context['formcomponent'] = flow.getFormComponent(app.routeid,workflowtype)
+#        print context['workflow_actions']
 
         # context = flow.getAllGroupAccess(request,context,app.routeid,workflowtype)
         # may_update has extra business rules
-        if int(app.routeid) > 1:
+        if float(app.routeid) > 1:
             if app.assignee is None:
                 context['may_update'] = "False"
                 del context['workflow_actions']
@@ -236,6 +263,7 @@ class ApplicationDetail(DetailView):
             if app.assignee != self.request.user:
                 del context['workflow_actions']
                 context['workflow_actions'] = []
+
         # elif app.app_type == app.APP_TYPE_CHOICES.emergencyold:
         #    self.template_name = 'applications/application_detail_emergency.html'
         #
@@ -356,6 +384,17 @@ class ApplicationDetailPDF(ApplicationDetail):
             obj.pk)
 """
 
+        return initial
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('cancel'):
+            app = Application.objects.get(id=kwargs['pk'])
+            if app.state == app.APP_STATE_CHOICES.new:
+                app.delete()
+                return HttpResponseRedirect(reverse('application_list'))
+            return HttpResponseRedirect(self.get_object().get_absolute_url())
+        return super(ApplicationUpdate, self).post(request, *args, **kwargs)
+
 
 class ApplicationActions(DetailView):
     model = Application
@@ -369,6 +408,177 @@ class ApplicationActions(DetailView):
             content_type=ContentType.objects.get_for_model(app), object_id=app.pk).order_by('-timestamp')
         return context
 
+class ApplicationComms(DetailView):
+    model = Communication 
+    template_name = 'applications/application_comms.html'
+
+    def get_context_data(self, **kwargs):
+        context = super(ApplicationComms, self).get_context_data(**kwargs)
+        app = self.get_object()
+        # TODO: define a GenericRelation field on the Application model.
+        context['communications'] = Communication.objects.filter(application_id=app.pk).order_by('-created')
+        return context
+
+class ApplicationCommsCreate(CreateView):
+    model = Communication
+    form_class = apps_forms.CommunicationCreateForm
+    template_name = 'applications/application_comms_create.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super(ApplicationCommsCreate, self).get_context_data(**kwargs)
+        context['page_heading'] = 'Create new communication'
+        return context
+
+    def get_initial(self):
+        initial = {}
+  #      app = self.get_object()
+
+ #       print app.application.id
+#        initial['application']  =app.application
+        initial['application'] = self.kwargs['pk']
+        return initial
+
+    def get_form_kwargs(self):
+        kwargs = super(ApplicationCommsCreate, self).get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('cancel'):
+            return HttpResponseRedirect(reverse('home_page'))
+        return super(ApplicationCommsCreate, self).post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        """Override form_valid to set the assignee as the object creator.
+        """
+        self.object = form.save(commit=False)
+        app_id = self.kwargs['pk']
+
+        application = Application.objects.get(id=app_id)
+        self.object.application = application
+        self.object.save()
+
+        if self.request.FILES.get('records'):
+            if Attachment_Extension_Check('multi', self.request.FILES.getlist('records'), None) is False:
+                raise ValidationError('Documents attached contains and unallowed attachment extension.')
+
+            for f in self.request.FILES.getlist('records'):
+                doc = Record()
+                doc.upload = f
+                doc.save()
+                self.object.records.add(doc)
+        self.object.save()
+        # If this is not an Emergency Works set the applicant as current user
+        success_url = reverse('application_comms', args=(app_id,))
+        return HttpResponseRedirect(success_url)
+
+
+
+
+class ApplicationChange(LoginRequiredMixin, CreateView):
+    """This view is for changes or ammendents to existing applications
+    """
+#   model = Approval
+    form_class = apps_forms.ApplicationChange
+    template_name = 'applications/application_change_form.html'
+#   def get(self, request, *args, **kwargs):
+#        return super(ApplicationChange, self).get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super(ApplicationChange, self).get_context_data(**kwargs)
+        context['page_heading'] = 'Update application details'
+
+        #approval = Approval.objects.get(id=self.kwargs['approvalid'])
+        #application = Application.objects.get(id=approval.application.id)
+
+
+        #app = self.get_object()
+
+        # if app.app_type == app.APP_TYPE_CHOICES.part5:
+#        if app.routeid is None:
+#            app.routeid = 1
+#
+#        request = self.request
+#       / flow = Flow()
+#        workflowtype = flow.getWorkFlowTypeFromApp(app)
+#        flow.get(workflowtype)
+ #       context = flow.getAccessRights(request, context, app.routeid, workflowtype)
+        return context
+
+    def get_form_kwargs(self):
+         kwargs = super(ApplicationChange, self).get_form_kwargs()
+        # kwargs['user'] = self.request.user
+         return kwargs
+
+    def get_initial(self):
+        initial = {}
+        action = self.kwargs['action'] 
+        approval = Approval.objects.get(id=self.kwargs['approvalid']) 
+        application = Application.objects.get(id=approval.application.id)
+
+        initial['title']  = application.title
+        initial['description'] = application.description
+#       initial['cost'] = application.cost
+
+        if action == "amend": 
+            if approval.ammendment_application: 
+                initial['app_type'] = 6
+            else:
+                raise ValidationError('There was and error raising your Application Change.')
+        elif action == 'requestamendment': 
+            initial['app_type'] = 5
+        else:
+            raise ValidationError('There was and error raising your Application Change.')
+
+        return initial
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('cancel'):
+            return HttpResponseRedirect(self.get_object().get_absolute_url())
+        return super(ApplicationChange, self).post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        """Override form_valid to set the state to draft is this is a new application.
+        """
+        self.object = form.save(commit=False)
+        action = self.kwargs['action']
+        forms_data = form.cleaned_data
+
+        approval = Approval.objects.get(id=self.kwargs['approvalid'])
+        application = Application.objects.get(id=approval.application.id)
+
+        if action == "amend":
+            if approval.ammendment_application:
+                self.object.app_type = 6
+            else:
+                raise ValidationError('There was and error raising your Application Change.')
+        elif action == 'requestamendment':
+                self.object.app_type = 5
+        else: 
+            raise ValidationError('There was and error raising your Application Change.')
+
+        self.object.proposed_development_description = forms_data['proposed_development_description'] 
+        self.object.applicant = self.request.user
+        self.object.assignee = self.request.user
+        self.object.submitted_by = self.request.user
+        self.object.assignee = self.request.user
+        self.object.submit_date = date.today()
+        self.object.state = self.object.APP_STATE_CHOICES.new
+        self.object.approval_id = approval.id
+        self.object.save()
+
+        if self.request.FILES.get('proposed_development_plans'):
+            if Attachment_Extension_Check('multi', self.request.FILES.getlist('proposed_development_plans'), None) is False:
+                raise ValidationError('Proposed Development Plans contains and unallowed attachment extension.')
+        
+            for f in self.request.FILES.getlist('proposed_development_plans'):
+                doc = Record()
+                doc.upload = f
+                doc.save()
+                self.object.proposed_development_plans.add(doc)
+
+#        self.object = form.save(commit=False)
+        return HttpResponseRedirect(self.get_success_url())
 
 class ApplicationUpdate(LoginRequiredMixin, UpdateView):
     """A view for updating a draft (non-lodged) application.
@@ -470,8 +680,9 @@ class ApplicationUpdate(LoginRequiredMixin, UpdateView):
 
 #       flow = Flow()
         #workflow = flow.get()
-#        print (workflow)
+#       print (workflow)
 #       initial['land_owner_consent'] = app.land_owner_consent.all()
+
         multifilelist = []
         a1 = app.land_owner_consent.all()
         for b1 in a1:
@@ -1209,6 +1420,7 @@ class ApplicationAssignNextAction(LoginRequiredMixin, UpdateView):
         workflowtype = flow.getWorkFlowTypeFromApp(app)
         DefaultGroups = flow.groupList()
         flow.get(workflowtype)
+        assessed_by = None
 
         if action == "creator":
             groupassignment = None
@@ -1218,6 +1430,8 @@ class ApplicationAssignNextAction(LoginRequiredMixin, UpdateView):
             assignee = None
         else:
             assignee = None
+            assessed_by = self.request.user 
+            
             groupassignment = Group.objects.get(name=DefaultGroups['grouplink'][action])
 
         route = flow.getNextRouteObj(action, app.routeid, workflowtype)
@@ -1256,14 +1470,36 @@ class ApplicationAssignNextAction(LoginRequiredMixin, UpdateView):
         elif action == "referral":
             emailcontext['application_name'] = Application.APP_TYPE_CHOICES[app.app_type]
             emailApplicationReferrals(app.id, 'Application for Feedback ', emailcontext, 'application-assigned-to-referee.html', None, None, None)
+        if self.object.state == '14':
+            self.complete_application(app)
+        if self.object.state == '10': 
+            self.ammendment_approved(app) 
 
         # Record an action on the application:
         action = Action(
             content_object=self.object, category=Action.ACTION_CATEGORY_CHOICES.action, user=self.request.user,
             action='Next Step Application Assigned to group ({}) with action title ({}) and route id ({}) '.format(groupassignment, route['title'], self.object.routeid))
         action.save()
+
         return HttpResponseRedirect(self.get_success_url())
 
+    def complete_application(self,app): 
+        """Once and application is complete and approval needs to be created in the approval model.
+        """
+        approval = Approval.objects.create(
+                                          app_type=app.app_type,
+                                          title=app.title,
+                                          applicant = app.applicant,
+                                          application=app,
+                                          start_date = app.assessment_start_date,
+                                          status = 1
+                )
+    def ammendment_approved(self,app):
+
+        approval = Approval.objects.get(id=app.approval_id)
+        approval.ammendment_application = app
+        approval.save()
+        return
 
 class ApplicationAssignPerson(LoginRequiredMixin, UpdateView):
     """A view to allow an application to be assigned to an internal user or back to the customer.
@@ -2531,6 +2767,7 @@ class VesselCreate(LoginRequiredMixin, CreateView):
         self.object = form.save()
         app.vessels.add(self.object.id)
         app.save()
+
         # Registration document uploads.
         if self.request.FILES.get('registration'):
             # Remove any existing documents.
@@ -3025,3 +3262,8 @@ class UnlinkDelegate(LoginRequiredMixin, FormView):
             action='Unlinked delegate access for {}'.format(user.get_full_name()))
         action.save()
         return HttpResponseRedirect(self.get_success_url())
+
+
+
+
+
