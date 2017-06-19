@@ -1,7 +1,7 @@
 {% extends "base_pdf.html" %}
 
 {% block page_content %}
-<div class="container-fluid">
+<div class="container-fluid page">
     <div class="row">
         <h1>Application for {{ object.get_app_type_display }} - {{ object.pk }}</h1>
         <br />
@@ -36,10 +36,14 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
             <!-- Address details panel -->
+    <div class="row">
+        <div class="col-sm-8 col-md-9 col-lg-10">
             <div>
-                <h3 class="panel-title">
+                <h3>
                     Address Details
                 </h3>
                 <div>
@@ -71,36 +75,37 @@
                     </div>
                 </div>
             </div>
-            <!-- Emergency works panel -->
+        </div>
+    </div>
+    <!-- Emergency works panel -->
 
-            <div class="panel panel-default">
-                <div class="panel-heading" data-toggle="collapse" data-target="#emergency_collapse">
-                    <h3 class="panel-title">
-                        Emergency Works
-                        <span class="glyphicon glyphicon-minus collapse-glyph"></span>
-                    </h3>
-                </div>
-                <div class="panel-collapse collapse {{ collapse.emergencyworks }}" id="emergency_collapse">
-                    <div class="panel-body">
-                        <div class="col-sm-8 col-md-6 col-lg-3">
-                            <table class="table table-borderless">
-                                <tr>
-                                    <th>Issue Date</th>
-                                    <td>{{ object.issue_date|date:"d-M-Y" }}</td>
-                                </tr>
-                                <tr>
-                                    <th>Start Date</th>
-                                    <td>{{ object.proposed_commence|date:"d-M-Y" }}</td>
-                                </tr>
-                                <tr>
-                                    <th>Expiry Date</th>
-                                    <td>{{ object.proposed_end|date:"d-M-Y" }}</td>
-                                </tr>
-                            </table>
-                        </div>
+    <div class="row">
+        <div class="col-sm-8 col-md-9 col-lg-10">
+            <div>
+                <h3>
+                    Emergency Works
+                </h3>
+                <div>
+                    <div class="col-sm-8 col-md-6 col-lg-3">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th>Issue Date</th>
+                                <td>{{ object.issue_date|date:"d-M-Y" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Start Date</th>
+                                <td>{{ object.proposed_commence|date:"d-M-Y" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Expiry Date</th>
+                                <td>{{ object.proposed_end|date:"d-M-Y" }}</td>
+                            </tr>
+                        </table>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
             <!-- Conditions panel -->
             <div class="panel panel-default">

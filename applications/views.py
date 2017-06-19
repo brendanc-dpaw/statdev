@@ -337,6 +337,8 @@ class ApplicationDetailPDF(ApplicationDetail):
 
     def get(self, request, *args, **kwargs):
         response = super(ApplicationDetailPDF, self).get(request)
+        return response
+"""
         options = {
             'page-size': 'A4',
             'encoding': 'UTF-8',
@@ -352,7 +354,7 @@ class ApplicationDetailPDF(ApplicationDetail):
         obj = self.get_object()
         response['Content-Disposition'] = 'attachment; filename=application_{}.pdf'.format(
             obj.pk)
-        return response
+"""
 
 
 class ApplicationActions(DetailView):
